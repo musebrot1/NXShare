@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NXShare</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:       #18181c;
+  --surface:  #202026;
+  --surface2: #28282f;
+  --border:   #303038;
+  --accent:   #5b8fff;
+  --accent2:  #38d9a9;
+  --text:     #ededf0;
+  --muted:    #78788a;
+  --dim:      #48485a;
+  --r:        12px;
+  --rs:       7px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+
+header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  height: 58px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.logo-icon { width: 32px; height: 32px; border-radius: 7px; object-fit: cover; flex-shrink: 0; }
+.logo-text { font-size: 17px; font-weight: 600; letter-spacing: -0.2px; }
+.header-stats { margin-left: auto; display: flex; gap: 16px; align-items: center; }
+.stat-pill { display: flex; align-items: center; gap: 5px; font-size: 13px; color: var(--muted); }
+.stat-pill b { color: var(--text); font-weight: 500; }
+.stat-div { width: 1px; height: 14px; background: var(--border); }
+
+.toolbar {
+  padding: 10px 24px;
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.filter-btn {
+  padding: 5px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.14s;
+}
+.filter-btn:hover { color: var(--text); border-color: var(--dim); }
+.filter-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
+.filter-btn.active[data-filter="videos"] { background: var(--accent); border-color: var(--accent); color: white; }
+.select-all-btn {
+  padding: 5px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.14s;
+}
+.select-all-btn:hover { color: var(--text); border-color: var(--dim); }
+.toolbar-right { margin-left: auto; }
+.refresh-btn {
+  width: 32px; height: 32px;
+  border-radius: var(--rs);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 15px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.14s;
+}
+.refresh-btn:hover { color: var(--text); border-color: var(--dim); background: var(--surface2); }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 12px;
+  padding: 18px 24px 100px;
+}
+
+.card {
+  background: var(--surface);
+  border-radius: var(--r);
+  overflow: hidden;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.14s, transform 0.12s, box-shadow 0.14s;
+  position: relative;
+}
+.card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.3); border-color: var(--border); }
+.card.selected { border-color: white; }
+.card.selected.video-card { border-color: #00a8e0; }
+
+.card-thumb { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; background: var(--surface2); }
+.card-thumb-placeholder { width: 100%; aspect-ratio: 16/9; background: var(--surface2); display: flex; align-items: center; justify-content: center; font-size: 30px; }
+
+.card-info { padding: 9px 11px; display: flex; flex-direction: column; gap: 3px; }
+.card-datetime { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; color: var(--text); }
+.card-datetime .sep { color: var(--dim); }
+.card-time-val { color: var(--accent); font-family: 'DM Mono', monospace; font-size: 11px; }
+.card-size { font-size: 11px; color: var(--muted); }
+
+.type-badge {
+  position: absolute; top: 7px; left: 7px;
+  padding: 2px 7px;
+  border-radius: var(--rs);
+  font-size: 10px; font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase;
+  background: rgba(8,8,14,0.72); color: white;
+  border: 1px solid rgba(255,255,255,0.15);
+  backdrop-filter: blur(4px);
+}
+.type-badge.video { background: rgba(0,168,224,0.85); color: white; border-color: rgba(0,168,224,0.85); }
+
+.check-overlay {
+  position: absolute; top: 7px; right: 7px;
+  width: 21px; height: 21px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.35);
+  background: rgba(0,0,0,0.3);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: transparent;
+  transition: all 0.14s;
+  backdrop-filter: blur(4px);
+}
+.card.selected .check-overlay { background: white; border-color: white; color: #222; }
+.card.selected.video-card .check-overlay { background: #00a8e0; border-color: #00a8e0; color: white; }
+
+.download-bar {
+  display: none; position: fixed;
+  bottom: 0; left: 0; right: 0;
+  background: var(--surface); border-top: 1px solid var(--border);
+  padding: 11px 24px; align-items: center; gap: 10px; z-index: 200;
+}
+.download-bar.visible { display: flex; }
+.download-bar span { color: var(--muted); font-size: 13px; }
+.download-bar span b { color: var(--text); }
+.dl-btn {
+  margin-left: auto;
+  padding: 8px 20px; border-radius: var(--rs);
+  background: var(--accent); color: white;
+  font-weight: 600; font-size: 13px; font-family: 'DM Sans', sans-serif;
+  border: none; cursor: pointer; transition: opacity 0.14s;
+}
+.dl-btn:hover { opacity: 0.85; }
+.clear-btn {
+  padding: 8px 14px; border-radius: var(--rs);
+  background: transparent; color: var(--muted);
+  font-size: 13px; font-family: 'DM Sans', sans-serif;
+  border: 1px solid var(--border); cursor: pointer; transition: all 0.14s;
+}
+.clear-btn:hover { color: var(--text); }
+
+.load-more-wrap {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  text-align: center; padding: 14px;
+  background: linear-gradient(transparent, var(--bg) 45%);
+  z-index: 150;
+}
+.load-more-btn {
+  padding: 9px 26px; border-radius: 22px;
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); font-size: 13px; font-family: 'DM Sans', sans-serif; font-weight: 500;
+  cursor: pointer; transition: all 0.14s;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+}
+.load-more-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+.lightbox {
+  display: none; position: fixed; inset: 0;
+  background: rgba(6,6,10,0.93); z-index: 500;
+  align-items: center; justify-content: center;
+  flex-direction: column; gap: 14px;
+  backdrop-filter: blur(10px);
+}
+.lightbox.open { display: flex; }
+.lightbox img, .lightbox video {
+  max-width: 90vw; max-height: 78vh;
+  border-radius: 10px; box-shadow: 0 20px 60px rgba(0,0,0,0.7);
+  cursor: pointer;
+}
+.lightbox-meta { color: var(--muted); font-size: 12px; text-align: center; font-family: 'DM Mono', monospace; }
+.lightbox-meta b { color: var(--text); font-family: 'DM Sans', sans-serif; font-weight: 500; }
+.lightbox-actions { display: flex; gap: 9px; }
+.lb-btn { padding: 9px 20px; border-radius: var(--rs); border: none; font-size: 13px; font-weight: 600; font-family: 'DM Sans', sans-serif; cursor: pointer; transition: opacity 0.14s; }
+.lb-btn:hover { opacity: 0.85; }
+.lb-dl { background: var(--accent); color: white; }
+.lb-close { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
+
+footer {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  height: 42px; padding: 0 24px;
+  display: flex; align-items: center; gap: 9px;
+  background: var(--surface); border-top: 1px solid var(--border);
+  z-index: 98;
+}
+footer.hidden { display: none; }
+.footer-icon { width: 20px; height: 20px; border-radius: 5px; object-fit: cover; }
+.footer-text { font-size: 11px; color: var(--dim); }
+.footer-text b { color: var(--muted); font-weight: 500; }
+
+.status-msg { text-align: center; padding: 80px 24px; color: var(--muted); }
+.spinner { display: inline-block; width: 26px; height: 26px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.65s linear infinite; margin-bottom: 12px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header>
+  <img class="logo-icon" src="data:image/jpeg;base64,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" alt="NXShare">
+  <span class="logo-text">NXShare</span>
+  <div class="header-stats">
+    <div class="stat-pill">📷 <b id="stat-screenshots">0</b></div>
+    <div class="stat-div"></div>
+    <div class="stat-pill">🎬 <b id="stat-videos">0</b></div>
+  </div>
+</header>
+
+<div class="toolbar">
+  <button class="filter-btn active" data-filter="">All</button>
+  <button class="filter-btn" data-filter="screenshots">Screenshots</button>
+  <button class="filter-btn" data-filter="videos">Videos</button>
+  <button class="select-all-btn" id="select-all-btn">Select all</button>
+  <div class="toolbar-right">
+    <button class="refresh-btn" id="refresh-btn" title="Refresh">⟳</button>
+  </div>
+</div>
+
+<div id="content">
+  <div class="status-msg"><div class="spinner"></div><br>Loading gallery...</div>
+</div>
+
+<div class="download-bar" id="download-bar">
+  <span><b id="sel-count">0</b> selected</span>
+  <button class="clear-btn" id="clear-sel">Clear</button>
+  <button class="dl-btn" id="dl-selected">⬇ Download</button>
+</div>
+
+<div class="lightbox" id="lightbox">
+  <div id="lb-media-wrap"></div>
+  <div class="lightbox-meta" id="lb-meta"></div>
+  <div class="lightbox-actions">
+    <button class="lb-btn lb-dl" id="lb-dl">⬇ Download</button>
+    <button class="lb-btn lb-close" id="lb-close">✕ Close</button>
+  </div>
+</div>
+
+<footer id="footer">
+  <img class="footer-icon" src="data:image/jpeg;base64,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" alt="">
+  <span class="footer-text"><b>NXShare</b> v1.3.0 &nbsp;—&nbsp; made by musebrot ♥</span>
+</footer>
+
+<script>
+const BASE = '';
+let allFiles = [], filteredFiles = [], currentFilter = '';
+let selected = new Set(), offset = 0;
+const LIMIT = 60;
+let total = 0, loading = false, currentLightboxFile = null;
+
+function formatDateTime(date, time) {
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const [y, m, d] = date.split('-');
+  const hhmm = time ? time.slice(0,5) : '';
+  return { dateStr: `${months[parseInt(m)-1]} ${parseInt(d)}, ${y}`, timeStr: hhmm };
+}
+
+async function init() { await loadFiles(true); setupEvents(); }
+
+async function loadFiles(reset = false) {
+  if (loading) return;
+  loading = true;
+  if (reset) { offset = 0; allFiles = []; }
+  try {
+    const res = await fetch(`${BASE}/api/list?offset=${offset}&limit=${LIMIT}&filter=${encodeURIComponent(currentFilter)}`);
+    const data = await res.json();
+    total = data.total;
+    document.getElementById('stat-screenshots').textContent = data.screenshots;
+    document.getElementById('stat-videos').textContent = data.videos;
+    allFiles = reset ? data.files : [...allFiles, ...data.files];
+    filteredFiles = allFiles;
+    offset += data.files.length;
+    renderGrid(reset);
+  } catch(e) {
+    document.getElementById('content').innerHTML = `<div class="status-msg">⚠️ Connection error<br><small>${e.message}</small></div>`;
+  } finally { loading = false; }
+}
+
+function renderGrid(reset = false) {
+  const content = document.getElementById('content');
+  if (reset) content.innerHTML = '';
+  if (filteredFiles.length === 0) { content.innerHTML = '<div class="status-msg">No media found 🎮</div>'; return; }
+  let grid = content.querySelector('.grid');
+  if (reset || !grid) { content.innerHTML = ''; grid = document.createElement('div'); grid.className = 'grid'; content.appendChild(grid); }
+
+  const startIdx = reset ? 0 : grid.children.length;
+  filteredFiles.slice(startIdx).forEach(file => {
+    const card = document.createElement('div');
+    card.className = `card${file.type === 'video' ? ' video-card' : ''}`;
+    card.dataset.filename = file.filename;
+    const isVideo = file.type === 'video';
+    const mediaUrl = `${BASE}/media/${encodeURIComponent(file.filename)}`;
+    const thumbUrl = `${BASE}/thumb/${encodeURIComponent(file.filename)}`;
+    const sizeMb = (file.size / 1024 / 1024).toFixed(1);
+    const { dateStr, timeStr } = formatDateTime(file.date, file.time);
+
+    card.innerHTML = `
+      <div class="check-overlay">✓</div>
+      <img class="card-thumb" src="${thumbUrl}" loading="lazy"
+           onerror="this.outerHTML='<div class=\'card-thumb-placeholder\'>${isVideo ? '🎬' : '📷'}</div>'">
+      <span class="type-badge${isVideo ? ' video' : ''}">${isVideo ? 'Video' : 'Photo'}</span>
+      <div class="card-info">
+        <div class="card-datetime">
+          <span>${dateStr}</span><span class="sep">·</span>
+          <span class="card-time-val">${timeStr}</span>
+        </div>
+        <div class="card-size">${sizeMb} MB</div>
+      </div>`;
+
+    card.addEventListener('click', e => {
+      if (selected.size > 0) toggleSelect(file.filename, card);
+      else openLightbox(file);
+    });
+    card.addEventListener('contextmenu', e => { e.preventDefault(); toggleSelect(file.filename, card); });
+    grid.appendChild(card);
+  });
+
+  const existing = content.querySelector('.load-more-wrap');
+  if (existing) existing.remove();
+  if (offset < total) {
+    const wrap = document.createElement('div');
+    wrap.className = 'load-more-wrap';
+    wrap.innerHTML = `<button class="load-more-btn">Load more &nbsp;(${total - offset} remaining)</button>`;
+    wrap.querySelector('button').addEventListener('click', () => loadFiles(false));
+    content.appendChild(wrap);
+  }
+  updateFooter();
+}
+
+function toggleSelect(filename, card) {
+  if (selected.has(filename)) { selected.delete(filename); card.classList.remove('selected'); }
+  else { selected.add(filename); card.classList.add('selected'); }
+  updateDownloadBar();
+}
+
+function openLightbox(file) {
+  currentLightboxFile = file;
+  const mediaUrl = `${BASE}/media/${encodeURIComponent(file.filename)}`;
+  const { dateStr, timeStr } = formatDateTime(file.date, file.time);
+  document.getElementById('lb-media-wrap').innerHTML = file.type === 'video'
+    ? `<video src="${mediaUrl}" type="video/mp4" controls autoplay style="max-width:90vw;max-height:75vh;border-radius:10px;cursor:pointer;" onclick="closeLightbox()"></video>`
+    : `<img src="${mediaUrl}" style="max-width:90vw;max-height:75vh;border-radius:10px;cursor:pointer;" onclick="closeLightbox()">`;
+  document.getElementById('lb-meta').innerHTML = `<b>${dateStr}</b> &nbsp; ${timeStr} &nbsp;·&nbsp; ${(file.size/1024/1024).toFixed(1)} MB`;
+  document.getElementById('lightbox').classList.add('open');
+}
+
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('open');
+  document.getElementById('lb-media-wrap').innerHTML = '';
+  currentLightboxFile = null;
+}
+
+function downloadFile(filename) {
+  const a = document.createElement('a');
+  a.href = `${BASE}/media/${encodeURIComponent(filename)}`;
+  a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+async function downloadSelected() {
+  const files = [...selected];
+  const btn = document.getElementById('dl-selected');
+  btn.disabled = true;
+  for (let i = 0; i < files.length; i++) {
+    btn.textContent = `⬇ ${i+1}/${files.length}...`;
+    downloadFile(files[i]);
+    await new Promise(r => setTimeout(r, 600));
+  }
+  btn.disabled = false; btn.textContent = '⬇ Download';
+}
+
+function updateDownloadBar() {
+  document.getElementById('sel-count').textContent = selected.size;
+  document.getElementById('download-bar').classList.toggle('visible', selected.size > 0);
+  updateFooter();
+}
+
+function updateFooter() {
+  document.getElementById('footer').classList.toggle('hidden',
+    document.getElementById('download-bar').classList.contains('visible'));
+}
+
+function clearSelection() {
+  selected.clear();
+  document.querySelectorAll('.card.selected').forEach(c => c.classList.remove('selected'));
+  updateDownloadBar();
+}
+
+function setupEvents() {
+  document.querySelectorAll('.filter-btn').forEach(btn => btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentFilter = btn.dataset.filter;
+    clearSelection(); loadFiles(true);
+  }));
+  document.getElementById('refresh-btn').addEventListener('click', async () => {
+    document.getElementById('content').innerHTML = '<div class="status-msg"><div class="spinner"></div><br>Refreshing...</div>';
+    await fetch('/api/refresh'); clearSelection(); await loadFiles(true);
+  });
+  document.getElementById('select-all-btn').addEventListener('click', () => {
+    const cards = document.querySelectorAll('.card');
+    const allSel = [...cards].every(c => c.classList.contains('selected'));
+    if (allSel) { clearSelection(); } else {
+      filteredFiles.forEach(f => selected.add(f.filename));
+      cards.forEach(c => c.classList.add('selected'));
+      updateDownloadBar();
+    }
+  });
+  document.getElementById('dl-selected').addEventListener('click', downloadSelected);
+  document.getElementById('clear-sel').addEventListener('click', clearSelection);
+  document.getElementById('lb-close').addEventListener('click', closeLightbox);
+  document.getElementById('lb-media-wrap').addEventListener('click', closeLightbox);
+  document.getElementById('lightbox').addEventListener('click', e => {
+    if (e.target === document.getElementById('lightbox')) closeLightbox();
+  });
+  document.getElementById('lb-dl').addEventListener('click', () => {
+    if (currentLightboxFile) downloadFile(currentLightboxFile.filename);
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeLightbox(); clearSelection(); } });
+}
+
+init();
+</script>
+</body>
+</html>
