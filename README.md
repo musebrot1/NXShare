@@ -66,7 +66,7 @@ NXShare starts a small web server on your Switch. Open the displayed URL in any 
 pacman -S switch-dev
 
 # Clone and build
-git clone https://github.com/musebrot/NXShare
+git clone https://github.com/musebrot1/NXShare
 cd NXShare
 make all
 ```
