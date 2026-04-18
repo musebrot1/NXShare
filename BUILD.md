@@ -1,9 +1,9 @@
 # NXShare – Build Guide (Windows)
 
-## What you need
+## Requirements
 
 1. **devkitPro** (free, official Nintendo Switch homebrew SDK)
-2. **About 10 minutes** for the installation
+2. **~10 minutes** for installation
 
 ---
 
@@ -15,8 +15,8 @@
 4. When selecting components, check:
    - ✅ **Switch Development** (required)
    - ✅ **devkitARM** (sometimes needed)
-5. Let everything install (takes about 5–10 minutes, downloads ~500 MB)
-6. The default path is `C:\devkitPro` — leave it as is
+5. Let everything install (~5-10 minutes, downloads ~500 MB)
+6. Leave the default path as `C:\devkitPro`
 
 ---
 
@@ -30,7 +30,7 @@ devkitPro automatically installs an MSYS2 environment.
 
 ---
 
-## Step 3: Install additional packages
+## Step 3: Install required packages
 
 In the MSYS2 terminal:
 
@@ -97,8 +97,8 @@ Built: NXShare.nro
 
 ## Compatibility
 
-- ✅ Atmosphère 1.9.0 and above
-- ✅ Firmware 19.x / 20.x
+- ✅ Atmosphère 1.11.1 and above
+- ✅ Firmware 19.x – 22.x (tested on 22.0.0)
 - ✅ SysMMC and emuMMC (album path is detected automatically)
 - ✅ JPG screenshots and MP4 videos
 - ✅ All modern browsers (Chrome, Firefox, Safari, Edge)

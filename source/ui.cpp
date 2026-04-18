@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <string>
+#include <switch.h>
 
 UI::UI() {}
 UI::~UI() {}
@@ -30,38 +31,66 @@ static void printLine(const char* color, char c) {
     printf(R "\n");
 }
 
+// Draw URL in a styled box
+static void printURLBox(const std::string& url) {
+    int urlLen = (int)url.size();
+    int lineW  = urlLen + 6;
+    int pad    = (CON_W - lineW) / 2;
+    if (pad < 0) pad = 0;
+
+    auto line = [&]() {
+        for (int i = 0; i < pad; i++) putchar(' ');
+        printf(CYAN);
+        for (int i = 0; i < lineW; i++) putchar('-');
+        printf(R "\n");
+    };
+
+    line();
+    putchar('\n');
+    for (int i = 0; i < pad + 3; i++) putchar(' ');
+    printf(BOLD WHITE "%s" R "\n", url.c_str());
+    putchar('\n');
+    line();
+}
+
+void UI::showQR(const std::string& url) {
+    // webConfigShow requires applet mode - initialize web applet services
+    Result rc;
+    WebCommonConfig config = {};
+
+    rc = webPageCreate(&config, url.c_str());
+    if (R_FAILED(rc)) return;
+
+    webConfigSetFooter(&config, false);
+    webConfigSetPointer(&config, true);
+    webConfigSetWhitelist(&config, ".*");
+
+    WebCommonReply reply = {};
+    rc = webConfigShow(&config, &reply);
+    (void)rc;
+}
+
 void UI::drawInfo(const std::string& ip, int port, int mediaCount) {
     printf("\033[2J\033[H");
 
-    // No title row - just a top separator
+    // Top separator
     printLine(DGRAY, '-');
 
-    // Vertical centering: block ~7 lines, center in rows 2..44
-    for (int i = 0; i < 17; i++) putchar('\n');
+    // Vertical padding to center content
+    for (int i = 0; i < 5; i++) putchar('\n');
 
-    // URL section
+    // Label
     printCentered(GRAY "Open in your browser:" R, 21);
     putchar('\n');
 
-    // URL centered, no side borders
+    // URL box
     std::string url = "http://" + ip + ":" + std::to_string(port);
-    int urlPad = (CON_W - (int)url.size()) / 2;
+    printURLBox(url);
 
-    // Top border
-    for (int i = 0; i < urlPad - 2; i++) putchar(' ');
-    printf(CYAN);
-    for (int i = 0; i < (int)url.size() + 4; i++) putchar('-');
-    printf(R "\n");
+    putchar('\n');
 
-    // URL line (no side bars)
-    for (int i = 0; i < urlPad; i++) putchar(' ');
-    printf(BOLD WHITE "%s" R "\n", url.c_str());
-
-    // Bottom border
-    for (int i = 0; i < urlPad - 2; i++) putchar(' ');
-    printf(CYAN);
-    for (int i = 0; i < (int)url.size() + 4; i++) putchar('-');
-    printf(R "\n");
+    // QR hint
+    printCentered(GRAY "Press [+] to exit" R, 17);
 
     putchar('\n');
     printLine(DGRAY, '-');
@@ -76,7 +105,7 @@ void UI::drawInfo(const std::string& ip, int port, int mediaCount) {
     putchar('\n');
     printLine(DGRAY, '-');
 
-    // Credit pinned to bottom - with real heart symbol ♥
+    // Credit pinned to bottom
     printf("\033[%d;0H", CON_H);
-    printCentered(BOLD ORANGE "NXShare v1.3.0" R " " GRAY "---" R " " ORANGE "by musebrot <3" R, 33);
+    printCentered(BOLD ORANGE "NXShare v1.3.1" R " " GRAY "---" R " " ORANGE "by musebrot <3" R, 33);
 }

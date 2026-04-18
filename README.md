@@ -27,8 +27,8 @@ NXShare starts a small web server on your Switch. Open the displayed URL in any 
 
 | | |
 |---|---|
-| **Atmosphère** | 1.9.0 and above |
-| **Firmware** | Tested on 22.0.0 |
+| **Atmosphère** | 1.11.1 and above |
+| **Firmware** | Tested on 19.x – 22.x (tested on 22.0.0) |
 | **Storage** | SysMMC and emuMMC (auto-detected) |
 
 ---
@@ -39,7 +39,8 @@ NXShare starts a small web server on your Switch. Open the displayed URL in any 
 2. Copy it to the `switch/` folder on your SD card
 3. Launch via the Homebrew Launcher
 
-NXShare is also available in the Homebrew App Store
+NXShare is also available on the **Homebrew App Store**.
+
 ---
 
 ## Usage
@@ -66,7 +67,7 @@ NXShare is also available in the Homebrew App Store
 pacman -S switch-dev
 
 # Clone and build
-git clone https://github.com/musebrot1/NXShare
+git clone https://github.com/musebrot/NXShare
 cd NXShare
 make all
 ```
