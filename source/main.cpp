@@ -75,6 +75,8 @@ int main(int argc, char* argv[]) {
     ui.drawInfo(ipStr, PORT, mediaCount);
     consoleUpdate(NULL);
 
+    std::string serverUrl = std::string("http://") + ipStr + ":" + std::to_string(PORT);
+
     // Main loop - no printf after this point so screen stays clean
     while (appletMainLoop()) {
         padUpdate(&pad);
@@ -82,10 +84,27 @@ int main(int argc, char* argv[]) {
 
         if (kDown & HidNpadButton_Plus) break;
 
+        // [A] shows QR code
+        if (kDown & HidNpadButton_A) {
+            ui.showQR(serverUrl);
+            consoleUpdate(NULL);
+            // Wait for [A] or [B] to return
+            while (appletMainLoop()) {
+                padUpdate(&pad);
+                u64 k = padGetButtonsDown(&pad);
+                if (k & (HidNpadButton_A | HidNpadButton_B)) break;
+                consoleUpdate(NULL);
+                svcSleepThread(16666666ULL);
+            }
+            ui.drawInfo(ipStr, PORT, mediaCount);
+            consoleUpdate(NULL);
+        }
+
         if (kDown & HidNpadButton_Y) {
             gallery.scan();
             mediaCount = gallery.getCount();
             ui.drawInfo(ipStr, PORT, mediaCount);
+            consoleUpdate(NULL);
         }
 
         consoleUpdate(NULL);

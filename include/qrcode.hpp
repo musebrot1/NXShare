@@ -1,329 +1,245 @@
-// qrcode.hpp - Minimal QR Code encoder for Nintendo Switch console output
-// Supports Version 1-10, ECC Level L, Byte mode
-// Renders using UTF-8 half-block characters for compact display
-//
-// Algorithm based on the QR code specification ISO/IEC 18004
-
 #pragma once
-#include <string>
-#include <vector>
+// Minimal QR Code generator — Version 1-3, ECC Level M, Byte mode
+// Single-header, no dependencies. Renders as block art on Switch console.
+// Supports URLs up to ~50 chars (Version 3 = 44 data bytes)
+
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string>
+#include <vector>
 
-// ── GF(256) arithmetic ────────────────────────────────────────────────────────
-static const uint8_t GF_EXP[512] = {
-    1,2,4,8,16,32,64,128,29,58,116,232,205,135,19,38,76,152,45,90,180,117,234,201,143,3,6,12,24,48,96,192,
-    157,39,78,156,37,74,148,53,106,212,181,119,238,193,159,35,70,140,5,10,20,40,80,160,93,186,105,210,185,111,
-    222,161,95,190,97,194,153,47,94,188,101,202,137,15,30,60,120,240,253,231,211,187,107,214,177,127,254,225,
-    223,163,91,182,113,226,217,175,67,134,17,34,68,136,13,26,52,104,208,189,103,206,129,31,62,124,248,237,199,
-    147,59,118,236,197,151,51,102,204,133,23,46,92,184,109,218,169,79,158,33,66,132,21,42,84,168,77,154,41,82,
-    164,85,170,73,146,57,114,228,213,183,115,230,209,191,99,198,145,63,126,252,229,215,179,123,246,241,255,227,
-    219,171,75,150,49,98,196,149,55,110,220,165,87,174,65,130,25,50,100,200,141,7,14,28,56,112,224,221,167,83,
-    166,81,162,89,178,121,242,249,239,195,155,43,86,172,69,138,9,18,36,72,144,61,122,244,245,247,243,251,235,
-    203,139,11,22,44,88,176,125,250,233,207,131,27,54,108,216,173,71,142,
-    // repeat for exp table
-    1,2,4,8,16,32,64,128,29,58,116,232,205,135,19,38,76,152,45,90,180,117,234,201,143,3,6,12,24,48,96,192,
-    157,39,78,156,37,74,148,53,106,212,181,119,238,193,159,35,70,140,5,10,20,40,80,160,93,186,105,210,185,111,
-    222,161,95,190,97,194,153,47,94,188,101,202,137,15,30,60,120,240,253,231,211,187,107,214,177,127,254,225,
-    223,163,91,182,113,226,217,175,67,134,17,34,68,136,13,26,52,104,208,189,103,206,129,31,62,124,248,237,199,
-    147,59,118,236,197,151,51,102,204,133,23,46,92,184,109,218,169,79,158,33,66,132,21,42,84,168,77,154,41,82,
-    164,85,170,73,146,57,114,228,213,183,115,230,209,191,99,198,145,63,126,252,229,215,179,123,246,241,255,227,
-    219,171,75,150,49,98,196,149,55,110,220,165,87,174,65,130,25,50,100,200,141,7,14,28,56,112,224,221,167,83,
-    166,81,162,89,178,121,242,249,239,195,155,43,86,172,69,138,9,18,36,72,144,61,122,244,245,247,243,251,235,
-    203,139,11,22,44,88,176,125,250,233,207,131,27,54,108,216,173,71,142
-};
-static const uint8_t GF_LOG[256] = {
-    0,0,1,25,2,50,26,198,3,223,51,238,27,104,199,75,4,100,224,14,52,141,239,129,28,193,105,248,200,8,76,113,
-    5,138,101,47,225,36,15,33,53,147,142,218,240,18,130,69,29,181,194,125,106,39,249,185,201,154,9,120,77,228,
-    114,166,6,191,139,98,102,221,48,253,226,152,37,179,16,145,34,136,54,208,148,206,143,150,219,189,241,210,
-    19,92,131,56,70,64,30,66,182,163,195,72,126,110,107,58,40,84,250,133,186,61,202,94,155,159,10,21,121,43,
-    78,212,229,172,115,243,167,87,7,112,192,247,140,128,99,13,103,74,222,237,49,197,254,24,227,165,153,119,
-    38,184,180,124,17,68,146,217,35,32,137,46,55,63,209,91,149,188,207,205,144,135,151,178,220,252,190,97,
-    242,86,211,171,20,42,93,158,132,60,57,83,71,109,65,162,31,45,67,216,183,123,164,118,196,23,73,236,127,12,
-    111,246,108,161,59,82,41,157,85,170,251,96,134,177,187,204,62,90,203,89,95,176,156,169,160,81,11,245,22,
-    235,122,117,44,215,79,174,213,233,230,231,173,232,116,214,244,234,168,80,88,175
-};
+namespace QR {
 
+// ── GF(256) arithmetic ───────────────────────────────────────────────────────
+static uint8_t GF_EXP[512], GF_LOG[256];
+static bool gfReady = false;
+static void gfInit() {
+    if (gfReady) return;
+    uint8_t x = 1;
+    for (int i = 0; i < 255; i++) {
+        GF_EXP[i] = GF_EXP[i+255] = x;
+        GF_LOG[x] = i;
+        x = (uint8_t)(x<<1 ^ (x&0x80 ? 0x11D : 0));
+    }
+    gfReady = true;
+}
 static uint8_t gfMul(uint8_t a, uint8_t b) {
-    if (a == 0 || b == 0) return 0;
-    return GF_EXP[(GF_LOG[a] + GF_LOG[b]) % 255];
+    return (!a||!b) ? 0 : GF_EXP[GF_LOG[a]+GF_LOG[b]];
 }
 
-// ── Reed-Solomon ──────────────────────────────────────────────────────────────
-// Generator polynomials for various EC codeword counts (ECC-L)
-// We precompute for the sizes we need
-
-static std::vector<uint8_t> rsGenerator(int degree) {
-    std::vector<uint8_t> g = {1};
-    for (int i = 0; i < degree; i++) {
-        std::vector<uint8_t> t(g.size() + 1, 0);
-        uint8_t coeff = GF_EXP[i];
-        for (int j = 0; j < (int)g.size(); j++) {
-            t[j] ^= gfMul(g[j], coeff);
-            t[j+1] ^= g[j];
-        }
-        g = t;
+// ── Reed-Solomon encoder ─────────────────────────────────────────────────────
+static std::vector<uint8_t> rsEC(const std::vector<uint8_t>& data, int n) {
+    gfInit();
+    // Build generator polynomial
+    std::vector<uint8_t> g(n+1, 0); g[0] = 1;
+    for (int i = 0; i < n; i++) {
+        uint8_t a = GF_EXP[i];
+        for (int j = n; j > 0; j--)
+            g[j] = (uint8_t)(gfMul(g[j],a) ^ g[j-1]);
+        g[0] = gfMul(g[0], a);
     }
-    return g;
+    // Divide
+    std::vector<uint8_t> r(n, 0);
+    for (uint8_t b : data) {
+        uint8_t f = b ^ r[0];
+        for (int i = 0; i < n-1; i++) r[i] = r[i+1] ^ gfMul(g[n-1-i], f);
+        r[n-1] = gfMul(g[0], f);
+    }
+    return r;
 }
-
-static std::vector<uint8_t> rsDivide(const std::vector<uint8_t>& data, int ecCount) {
-    std::vector<uint8_t> gen = rsGenerator(ecCount);
-    std::vector<uint8_t> rem(data.begin(), data.end());
-    rem.resize(data.size() + ecCount, 0);
-    for (int i = 0; i < (int)data.size(); i++) {
-        uint8_t f = rem[i];
-        if (f != 0) {
-            for (int j = 1; j <= ecCount; j++) {
-                rem[i+j] ^= gfMul(gen[ecCount-j], f);
-            }
-        }
-    }
-    return std::vector<uint8_t>(rem.begin() + data.size(), rem.end());
-}
-
-// ── QR version/capacity tables (ECC-L) ───────────────────────────────────────
-struct QRVersion {
-    int version, size, dataCW, ecCW, remainder;
-};
-
-static const QRVersion QR_VERSIONS[] = {
-    {1,  21,  19,  7,  0},
-    {2,  25,  34, 10,  7},
-    {3,  29,  55, 15,  7},
-    {4,  33,  80, 20,  7},
-    {5,  37, 108, 26,  7},
-    {6,  41, 136, 36,  0},
-    {7,  45, 156, 40,  0},
-    {8,  49, 194, 48,  0},
-    {9,  53, 232, 60,  0},
-    {10, 57, 274, 72,  0},
-};
-
-// ── Bit buffer ────────────────────────────────────────────────────────────────
-struct BitBuffer {
-    std::vector<uint8_t> data;
-    int bits = 0;
-    void append(uint32_t val, int n) {
-        for (int i = n-1; i >= 0; i--) {
-            if (bits % 8 == 0) data.push_back(0);
-            if ((val >> i) & 1) data[bits/8] |= 1 << (7 - bits%8);
-            bits++;
-        }
-    }
-};
 
 // ── QR matrix ────────────────────────────────────────────────────────────────
-class QRMatrix {
-public:
-    int sz;
-    std::vector<uint8_t> modules;   // bit 0 = dark/light, bit 1 = reserved
-    QRMatrix(int s) : sz(s), modules(s*s, 0) {}
-
-    void set(int r, int c, bool dark, bool reserved = false) {
-        modules[r*sz+c] = (dark ? 1 : 0) | (reserved ? 2 : 0);
-    }
-    bool isReserved(int r, int c) const { return (modules[r*sz+c] & 2) != 0; }
-    bool isDark(int r, int c) const     { return (modules[r*sz+c] & 1) != 0; }
-
-    void setFinderPattern(int tr, int tc) {
-        for (int r = -1; r <= 7; r++)
-        for (int c = -1; c <= 7; c++) {
-            int rr = tr+r, cc = tc+c;
-            if (rr<0||rr>=sz||cc<0||cc>=sz) continue;
-            bool dark = (r>=0&&r<=6&&(c==0||c==6))||
-                        (c>=0&&c<=6&&(r==0||r==6))||
-                        (r>=2&&r<=4&&c>=2&&c<=4);
-            set(rr, cc, dark, true);
-        }
-    }
-
-    void setAlignmentPattern(int tr, int tc) {
-        for (int r = -2; r <= 2; r++)
-        for (int c = -2; c <= 2; c++) {
-            bool dark = (r==-2||r==2||c==-2||c==2||(r==0&&c==0));
-            set(tr+r, tc+c, dark, true);
-        }
-    }
-
-    void setTimingPatterns() {
-        for (int i = 8; i < sz-8; i++) {
-            set(6, i, i%2==0, true);
-            set(i, 6, i%2==0, true);
-        }
-    }
-
-    void setFormatInfo(int mask) {
-        // Format info for ECC-L = 0b01, mask appended
-        // Precomputed format strings for ECC-L masks 0-7
-        static const uint32_t FORMAT[8] = {
-            0x77C4, 0x72F3, 0x7DAA, 0x789D, 0x662F, 0x6318, 0x6C41, 0x6976
-        };
-        uint32_t fmt = FORMAT[mask & 7];
-        // Place around top-left finder
-        for (int i = 0; i <= 5; i++) set(8, i, (fmt>>i)&1, true);
-        set(8, 7, (fmt>>6)&1, true);
-        set(8, 8, (fmt>>7)&1, true);
-        set(7, 8, (fmt>>8)&1, true);
-        for (int i = 9; i <= 14; i++) set(14-i, 8, (fmt>>i)&1, true);
-        // Place around top-right and bottom-left finders
-        for (int i = 0; i <= 7; i++) set(sz-1-i, 8, (fmt>>i)&1, true);
-        for (int i = 8; i <= 14; i++) set(8, sz-15+i, (fmt>>i)&1, true);
-        set(sz-8, 8, true, true); // dark module
-    }
+struct Mat {
+    int N;
+    std::vector<uint8_t> mod, fn;
+    Mat() : N(0) {}
+    Mat(int n) : N(n), mod(n*n,0), fn(n*n,0) {}
+    bool get(int x,int y)  const { return mod[y*N+x]; }
+    bool isF(int x,int y)  const { return fn[y*N+x]; }
+    void setM(int x,int y,bool v){ mod[y*N+x]=v; }
+    void setF(int x,int y,bool v){ mod[y*N+x]=v; fn[y*N+x]=1; }
 };
 
-// ── Alignment pattern positions ───────────────────────────────────────────────
-static const int ALIGN_POS[][7] = {
-    {},                          // v1
-    {6, 18},                     // v2
-    {6, 22},                     // v3
-    {6, 26},                     // v4
-    {6, 30},                     // v5
-    {6, 34},                     // v6
-    {6, 22, 38},                 // v7
-    {6, 24, 42},                 // v8
-    {6, 26, 46},                 // v9
-    {6, 28, 50},                 // v10
-};
-static const int ALIGN_CNT[] = {0,2,2,2,2,2,2,3,3,3,3};
+static void finder(Mat& m, int ox, int oy) {
+    for (int dy=0;dy<=6;dy++) for (int dx=0;dx<=6;dx++) {
+        bool v=dx==0||dx==6||dy==0||dy==6||(dx>=2&&dx<=4&&dy>=2&&dy<=4);
+        int x=ox+dx,y=oy+dy;
+        if(x>=0&&x<m.N&&y>=0&&y<m.N) m.setF(x,y,v);
+    }
+    // separator
+    for (int i=-1;i<=7;i++) {
+        auto sp=[&](int x,int y){ if(x>=0&&x<m.N&&y>=0&&y<m.N&&!m.isF(x,y)) m.setF(x,y,false); };
+        sp(ox+i,oy-1); sp(ox-1,oy+i); sp(ox+7,oy+i); sp(ox+i,oy+7);
+    }
+}
+static void align(Mat& m, int cx, int cy) {
+    for (int dy=-2;dy<=2;dy++) for (int dx=-2;dx<=2;dx++)
+        m.setF(cx+dx,cy+dy, abs(dx)==2||abs(dy)==2||(dx==0&&dy==0));
+}
+static void timing(Mat& m) {
+    for (int i=8;i<m.N-8;i++) { m.setF(i,6,i%2==0); m.setF(6,i,i%2==0); }
+}
+// Format bits for ECC-M, masks 0-7
+static const uint16_t FMT[8]={0x5412,0x5125,0x5E7C,0x5B4B,0x45F9,0x40CE,0x4F97,0x4AA0};
+static void formatBits(Mat& m, int mask) {
+    uint16_t bits = FMT[mask&7];
+    for (int i=0;i<=5;i++) m.setF(8,i,(bits>>i)&1);
+    m.setF(8,7,(bits>>6)&1); m.setF(8,8,(bits>>7)&1); m.setF(7,8,(bits>>8)&1);
+    for (int i=9;i<=14;i++) m.setF(14-i,8,(bits>>i)&1);
+    for (int i=0;i<=7;i++) m.setF(m.N-1-i,8,(bits>>i)&1);
+    for (int i=8;i<=14;i++) m.setF(8,m.N-15+i,(bits>>i)&1);
+    m.setF(8,m.N-8,true);
+}
+static bool maskFn(int mask,int x,int y) {
+    switch(mask){
+        case 0: return (x+y)%2==0;
+        case 1: return y%2==0;
+        case 2: return x%3==0;
+        case 3: return (x+y)%3==0;
+        case 4: return (y/2+x/3)%2==0;
+        case 5: return (x*y)%2+(x*y)%3==0;
+        case 6: return ((x*y)%2+(x*y)%3)%2==0;
+        case 7: return ((x+y)%2+(x*y)%3)%2==0;
+    }
+    return false;
+}
 
-// ── Main QR encoder ───────────────────────────────────────────────────────────
-static bool encodeQR(const std::string& text, QRMatrix& out) {
+// Version info: size, total data bytes (ECC-M), EC bytes
+struct Ver { int size, dataB, ecB; };
+static const Ver VINFO[3]={{21,16,10},{25,28,16},{29,44,26}};
+
+static bool build(const std::string& text, Mat& out) {
     int len = (int)text.size();
+    int vi = -1;
+    for (int i=0;i<3;i++) { if (4+8+8*len <= VINFO[i].dataB*8) { vi=i; break; } }
+    if (vi<0) return false;
+    const Ver& v = VINFO[vi];
 
-    // Pick version
-    int ver = -1;
-    const QRVersion* vinfo = nullptr;
-    for (int i = 0; i < 10; i++) {
-        // Byte mode: 4 + 8 bits header, then 8*len data bits
-        int needed = (4 + 8 + 8*len + 7) / 8;
-        if (needed <= QR_VERSIONS[i].dataCW) {
-            ver = QR_VERSIONS[i].version;
-            vinfo = &QR_VERSIONS[i];
-            break;
-        }
+    // Encode: mode(4)=0100, length(8), data bytes
+    std::vector<bool> bits;
+    auto pushBits=[&](int val,int n){ for(int i=n-1;i>=0;i--) bits.push_back((val>>i)&1); };
+    pushBits(4,4); pushBits(len,8);
+    for (char c : text) pushBits((uint8_t)c, 8);
+    pushBits(0,4); // terminator
+    while ((int)bits.size()%8) bits.push_back(false);
+    std::vector<uint8_t> data;
+    for (int i=0;i<(int)bits.size();i+=8) {
+        uint8_t b=0; for(int j=0;j<8;j++) b=(b<<1)|bits[i+j];
+        data.push_back(b);
     }
-    if (ver < 0) return false; // too long
+    static const uint8_t PAD[]={0xEC,0x11};
+    for (int i=0;(int)data.size()<v.dataB;i++) data.push_back(PAD[i%2]);
 
-    // Build data codewords
-    BitBuffer bb;
-    bb.append(0b0100, 4);    // byte mode
-    bb.append(len, 8);       // character count
-    for (char c : text) bb.append((uint8_t)c, 8);
-    bb.append(0, 4);         // terminator
-    // Pad to byte boundary
-    while (bb.bits % 8 != 0) bb.append(0, 1);
-    // Pad to dataCW
-    bool flip = false;
-    while ((int)bb.data.size() < vinfo->dataCW) {
-        bb.data.push_back(flip ? 0x11 : 0xEC);
-        flip = !flip;
-    }
-
-    // Reed-Solomon
-    std::vector<uint8_t> ec = rsDivide(bb.data, vinfo->ecCW);
-
-    // Interleave (single block for these versions)
-    std::vector<uint8_t> codewords(bb.data.begin(), bb.data.end());
-    codewords.insert(codewords.end(), ec.begin(), ec.end());
+    // EC
+    auto ec = rsEC(data, v.ecB);
+    std::vector<uint8_t> cw; cw.insert(cw.end(),data.begin(),data.end()); cw.insert(cw.end(),ec.begin(),ec.end());
 
     // Build matrix
-    int sz = vinfo->size;
-    QRMatrix qr(sz);
+    Mat m(v.size);
+    finder(m,0,0); finder(m,m.N-7,0); finder(m,0,m.N-7);
+    timing(m);
+    if (vi>=1) align(m,m.N-7,m.N-7);
+    formatBits(m,0);
 
-    // Finder patterns
-    qr.setFinderPattern(0, 0);
-    qr.setFinderPattern(0, sz-7);
-    qr.setFinderPattern(sz-7, 0);
-
-    // Timing patterns
-    qr.setTimingPatterns();
-
-    // Alignment patterns
-    if (ver >= 2) {
-        const int* ap = ALIGN_POS[ver-1];
-        int ac = ALIGN_CNT[ver];
-        for (int i = 0; i < ac; i++)
-        for (int j = 0; j < ac; j++) {
-            int r = ap[i], c = ap[j];
-            // Skip if overlaps with finder
-            if ((r <= 8 && c <= 8) || (r <= 8 && c >= sz-8) || (r >= sz-8 && c <= 8))
-                continue;
-            qr.setAlignmentPattern(r, c);
-        }
-    }
-
-    // Dark module
-    qr.set(sz-8, 8, true, true);
-
-    // Format info placeholder (mask 0)
-    qr.setFormatInfo(0);
-
-    // Place data bits using zigzag pattern
-    int bitIdx = 0;
-    int totalBits = (int)codewords.size() * 8 + vinfo->remainder;
-    auto getBit = [&](int idx) -> bool {
-        if (idx >= (int)codewords.size()*8) return false;
-        return (codewords[idx/8] >> (7 - idx%8)) & 1;
-    };
-
-    for (int col = sz-1; col >= 1; col -= 2) {
-        if (col == 6) col--; // skip timing column
-        for (int row = 0; row < sz; row++) {
-            for (int dx = 0; dx <= 1; dx++) {
-                int c = col - dx;
-                int r = ((col+1)/2 % 2 == 0) ? (sz-1-row) : row;
-                if (!qr.isReserved(r, c)) {
-                    bool bit = (bitIdx < totalBits) && getBit(bitIdx++);
-                    // Apply mask 0: (row+col) % 2 == 0
-                    if ((r + c) % 2 == 0) bit = !bit;
-                    qr.set(r, c, bit);
-                }
+    // Place data
+    int bi=0, total=(int)cw.size()*8;
+    for (int right=m.N-1;right>=1;right-=2) {
+        if (right==6) right=5;
+        for (int vert=0;vert<m.N;vert++) {
+            for (int j=0;j<2;j++) {
+                int x=right-j;
+                bool up=((right+1)&2)==0;
+                int y=up?(m.N-1-vert):vert;
+                if (m.isF(x,y)) continue;
+                bool bit=false;
+                if (bi<total) { bit=(cw[bi/8]>>(7-bi%8))&1; bi++; }
+                m.setM(x,y,bit);
             }
         }
     }
 
-    out = qr;
+    // Choose best mask
+    int bestMask=0, bestPen=0x7FFFFFFF;
+    for (int mask=0;mask<8;mask++) {
+        Mat tmp=m;
+        for (int y=0;y<tmp.N;y++) for (int x=0;x<tmp.N;x++)
+            if (!tmp.isF(x,y)&&maskFn(mask,x,y)) tmp.setM(x,y,!tmp.get(x,y));
+        formatBits(tmp,mask);
+        // Penalty rule 1 only (good enough for selection)
+        int pen=0;
+        for (int y=0;y<tmp.N;y++) {
+            int run=1;
+            for (int x=1;x<tmp.N;x++) {
+                if (tmp.get(x,y)==tmp.get(x-1,y)){ run++; if(run==5)pen+=3; else if(run>5)pen++; }
+                else run=1;
+            }
+        }
+        if (pen<bestPen) { bestPen=pen; bestMask=mask; }
+    }
+    for (int y=0;y<m.N;y++) for (int x=0;x<m.N;x++)
+        if (!m.isF(x,y)&&maskFn(bestMask,x,y)) m.setM(x,y,!m.get(x,y));
+    formatBits(m,bestMask);
+
+    out = m;
     return true;
 }
 
-// ── Console renderer ──────────────────────────────────────────────────────────
-// Renders QR code using half-block chars, centered on 80-char console
-// Each 2 QR rows → 1 console line using ▀ ▄ █ space
-static void printQRToConsole(const std::string& url) {
-    QRMatrix qr(21); // placeholder size
-    if (!encodeQR(url, qr)) {
-        printf("QR: URL too long\n");
-        return;
-    }
+// ── Console print ─────────────────────────────────────────────────────────────
+// ANSI background color blocks only — no special unicode chars.
+// QR_B = black bg, QR_W = white bg, each module = 2 spaces wide.
+// printSmall: each row printed ONCE, 1 space per module = compact inline
+// print: each row printed ONCE, 2 spaces per module = full-screen QR
 
-    int sz = qr.sz;
-    // Add 2-module quiet zone (print as spaces)
-    int border = 2;
-    int totalRows = sz + border * 2;
-    int totalCols = sz + border * 2;
-    int padLeft = (80 - totalCols) / 2;
+static void _printQR(const std::string& text, int charsPerMod, int borderMods) {
+    Mat m;
+    if (!build(text, m)) { printf("  (URL too long for QR)\n"); return; }
+
+    int totalW = (m.N + borderMods*2) * charsPerMod;
+    int padLeft = (80 - totalW) / 2;
     if (padLeft < 0) padLeft = 0;
 
-    auto getModule = [&](int r, int c) -> bool {
-        r -= border; c -= border;
-        if (r < 0 || r >= sz || c < 0 || c >= sz) return false;
-        return qr.isDark(r, c);
+    auto row = [&](int y) {
+        for (int i = 0; i < padLeft; i++) putchar(' ');
+        // left quiet zone
+        printf("\033[47m");
+        for (int i = 0; i < borderMods * charsPerMod; i++) putchar(' ');
+        // modules
+        for (int x = 0; x < m.N; x++) {
+            printf(m.get(x, y) ? "\033[40m" : "\033[47m");
+            for (int c = 0; c < charsPerMod; c++) putchar(' ');
+        }
+        // right quiet zone
+        printf("\033[47m");
+        for (int i = 0; i < borderMods * charsPerMod; i++) putchar(' ');
+        printf("\033[0m\n");
     };
 
-    // Print 2 rows per line using half-block chars
-    for (int row = 0; row < totalRows; row += 2) {
-        for (int p = 0; p < padLeft; p++) putchar(' ');
-        for (int col = 0; col < totalCols; col++) {
-            bool top    = getModule(row,   col);
-            bool bottom = (row+1 < totalRows) ? getModule(row+1, col) : false;
-            if (top && bottom)       printf("\xe2\x96\x88"); // █ full block
-            else if (top)            printf("\xe2\x96\x80"); // ▀ upper half
-            else if (bottom)         printf("\xe2\x96\x84"); // ▄ lower half
-            else                     printf(" ");
-        }
-        printf("\n");
-    }
+    auto blankRow = [&]() {
+        for (int i = 0; i < padLeft; i++) putchar(' ');
+        printf("\033[47m");
+        for (int i = 0; i < totalW; i++) putchar(' ');
+        printf("\033[0m\n");
+    };
+
+    // top quiet zone
+    for (int b = 0; b < borderMods; b++) blankRow();
+    // QR rows
+    for (int y = 0; y < m.N; y++) row(y);
+    // bottom quiet zone
+    for (int b = 0; b < borderMods; b++) blankRow();
 }
+
+// Compact: 1 char per module, 2 border modules = 25 chars wide, 25 lines tall
+// Fits on main screen
+static void printSmall(const std::string& text) {
+    _printQR(text, 1, 1);
+}
+
+// Full size: 2 chars per module, 2 border modules = fits QR screen
+static void print(const std::string& text) {
+    _printQR(text, 2, 2);
+}
+
+} // namespace QR
