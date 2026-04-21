@@ -115,6 +115,22 @@ void Server::handleClient(int clientSock) {
         handleMedia(clientSock, req);
     } else if (req.path.substr(0, 7) == "/thumb/") {
         handleThumb(clientSock, req);
+    } else if (req.path == "/icon.jpg") {
+        FILE* f = fopen("romfs:/icon.jpg", "rb");
+        if (!f) f = fopen("sdmc:/switch/NXShare/icon.jpg", "rb");
+        if (!f) f = fopen("sdmc:/switch/icon.jpg", "rb");
+        if (f) {
+            fseek(f, 0, SEEK_END);
+            long sz = ftell(f);
+            fseek(f, 0, SEEK_SET);
+            std::vector<uint8_t> buf(sz);
+            fread(buf.data(), 1, sz, f);
+            fclose(f);
+            std::string body(buf.begin(), buf.end());
+            sendResponse(clientSock, 200, "image/jpeg", body);
+        } else {
+            sendNotFound(clientSock);
+        }
     } else {
         sendNotFound(clientSock);
     }

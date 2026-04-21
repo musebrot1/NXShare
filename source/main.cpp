@@ -17,16 +17,15 @@
 #define PORT 8080
 
 int main(int argc, char* argv[]) {
-    consoleInit(NULL);
     padConfigureInput(1, HidNpadStyleSet_NpadStandard);
     PadState pad;
     padInitializeDefault(&pad);
 
+    romfsInit();
     socketInitializeDefault();
     nifmInitialize(NifmServiceType_User);
 
     printf("NXShare - Starting up...\n");
-    consoleUpdate(NULL);
 
     // Wait for network
     NifmInternetConnectionStatus status;
@@ -37,19 +36,16 @@ int main(int argc, char* argv[]) {
         nifmGetInternetConnectionStatus(&type, &strength, &status);
         if (status == NifmInternetConnectionStatus_Connected) break;
         printf("Waiting for network... (%d/30)\n", retries + 1);
-        consoleUpdate(NULL);
-        svcSleepThread(1000000000ULL);
+            svcSleepThread(1000000000ULL);
         retries++;
     }
 
     if (retries >= 30) {
         printf("ERROR: No network connection!\nMake sure WiFi is connected.\n\nPress + to exit.\n");
-        consoleUpdate(NULL);
-        while (appletMainLoop()) {
+            while (appletMainLoop()) {
             padUpdate(&pad);
             if (padGetButtonsDown(&pad) & HidNpadButton_Plus) break;
-            consoleUpdate(NULL);
-            svcSleepThread(16666666ULL);
+                    svcSleepThread(16666666ULL);
         }
         nifmExit(); socketExit(); consoleExit(NULL);
         return 0;
@@ -73,9 +69,6 @@ int main(int argc, char* argv[]) {
     // Draw UI once, then never print anything else
     UI ui;
     ui.drawInfo(ipStr, PORT, mediaCount);
-    consoleUpdate(NULL);
-
-    std::string serverUrl = std::string("http://") + ipStr + ":" + std::to_string(PORT);
 
     // Main loop - no printf after this point so screen stays clean
     while (appletMainLoop()) {
@@ -84,34 +77,16 @@ int main(int argc, char* argv[]) {
 
         if (kDown & HidNpadButton_Plus) break;
 
-        // [A] shows QR code
-        if (kDown & HidNpadButton_A) {
-            ui.showQR(serverUrl);
-            consoleUpdate(NULL);
-            // Wait for [A] or [B] to return
-            while (appletMainLoop()) {
-                padUpdate(&pad);
-                u64 k = padGetButtonsDown(&pad);
-                if (k & (HidNpadButton_A | HidNpadButton_B)) break;
-                consoleUpdate(NULL);
-                svcSleepThread(16666666ULL);
-            }
-            ui.drawInfo(ipStr, PORT, mediaCount);
-            consoleUpdate(NULL);
-        }
-
         if (kDown & HidNpadButton_Y) {
             gallery.scan();
             mediaCount = gallery.getCount();
             ui.drawInfo(ipStr, PORT, mediaCount);
-            consoleUpdate(NULL);
-        }
+                }
 
-        consoleUpdate(NULL);
-        svcSleepThread(16666666ULL);
+            svcSleepThread(16666666ULL);
     }
 
     server.stop();
-    nifmExit(); socketExit(); consoleExit(NULL);
+    nifmExit(); socketExit(); romfsExit(); consoleExit(NULL);
     return 0;
 }
