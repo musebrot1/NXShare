@@ -67,7 +67,7 @@ NXShare is also available on the **Homebrew App Store**.
 pacman -S switch-dev
 
 # Clone and build
-git clone https://github.com/musebrot/NXShare
+git clone https://github.com/musebrot1/NXShare
 cd NXShare
 make all
 ```
