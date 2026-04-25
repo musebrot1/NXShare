@@ -8,13 +8,13 @@
 
 ## What it does
 
-NXShare starts a small web server on your Switch. Open the displayed URL in any browser on your phone or PC (same WiFi required), and you get a clean gallery view of all your screenshots and videos — with thumbnails, filters, multi-select download, and QR code scanning.
+NXShare starts a small web server on your Switch. Open the displayed URL in any browser on your phone or PC (same WiFi required), and you get a clean gallery view of all your screenshots and videos - with thumbnails, filters, multi-select download, and QR code scanning.
 
 - 🎬 Browse all screenshots and videos with thumbnails  
 - ⬇️ Download individual files or select multiple at once
 - 🔍 Filter by screenshots, videos, or by game
 - 🎮 Game filter — shows which game each screenshot/video is from
-- 📱 Works on any browser — phone, tablet, PC
+- 📱 Works on any browser - phone, tablet, PC
 - ⟳ Refresh the gallery without restarting the app
 
 ## Screenshots
