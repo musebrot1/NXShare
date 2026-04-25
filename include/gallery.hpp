@@ -15,9 +15,10 @@ struct MediaFile {
     std::string date;
     std::string time;
     std::string gameId;
+    std::string gameName;   // Resolved from NS application control data
     MediaType type;
     size_t filesize;
-    CapsAlbumEntry capsEntry;  // Nintendo capsa entry for thumbnail/stream access
+    CapsAlbumEntry capsEntry;
 };
 
 class Gallery {
@@ -30,9 +31,9 @@ public:
     int getScreenshotCount() const;
     int getVideoCount() const;
     const std::vector<MediaFile>& getFiles() const;
-    const MediaFile* getFile(int index) const;
     const MediaFile* findByFilename(const std::string& filename) const;
-    std::string toJSON(int offset = 0, int limit = 50, const std::string& filter = "") const;
+    std::string toJSON(int offset = 0, int limit = 50, const std::string& filter = "", const std::string& game = "") const;
+    std::vector<std::string> getGameNames() const;
 
     // Get JPEG thumbnail via capsa API (works for both screenshots and videos)
     bool getThumbnail(const std::string& filename, std::vector<uint8_t>& outJpeg) const;
@@ -44,5 +45,6 @@ private:
     std::vector<MediaFile> m_files;
     void scanStorage(CapsAlbumStorage storage);
     void parseFilename(MediaFile& file) const;
+    void resolveGameNames();
     static std::string jsonEscape(const std::string& s);
 };
