@@ -7,6 +7,8 @@
 #include <string.h>
 #include <algorithm>
 #include <sstream>
+#include <map>
+#include <set>
 
 Gallery::Gallery() {}
 Gallery::~Gallery() {}
@@ -21,6 +23,9 @@ void Gallery::scan() {
     scanStorage(CapsAlbumStorage_Nand);
 
     capsaExit();
+
+    // Resolve game names via NS service
+    resolveGameNames();
 
     // Sort newest first
     std::sort(m_files.begin(), m_files.end(), [](const MediaFile& a, const MediaFile& b) {
@@ -113,6 +118,7 @@ void Gallery::parseFilename(MediaFile& file) const {
         file.gameId = fn.substr(dash+1, dot-dash-1);
     else
         file.gameId = "Unknown";
+    file.gameName = ""; // resolved later
 }
 
 bool Gallery::getThumbnail(const std::string& filename, std::vector<uint8_t>& outJpeg) const {
@@ -138,6 +144,81 @@ bool Gallery::getThumbnail(const std::string& filename, std::vector<uint8_t>& ou
     return true;
 }
 
+
+void Gallery::resolveGameNames() {
+    // Build unique set of application IDs
+    std::map<std::string, std::string> nameCache;
+
+    if (R_FAILED(nsInitialize())) return;
+
+    for (auto& f : m_files) {
+        if (f.gameId.empty() || f.gameId == "Unknown") continue;
+        if (nameCache.count(f.gameId)) {
+            f.gameName = nameCache[f.gameId];
+            continue;
+        }
+
+        // Parse application ID from hex string
+        u64 appId = 0;
+        try { appId = std::stoull(f.gameId, nullptr, 16); } catch (...) { continue; }
+        if (appId == 0) continue;
+
+        // Known system app IDs
+        static const std::map<u64, std::string> SYSTEM_NAMES = {
+            {0x0100000000001000ULL, "Home Screen"},
+            {0x0100000000001005ULL, "Errors"},
+            {0x0100000000001009ULL, "Mii Editor"},
+            {0x000000000000100DULL, "Homebrew"},
+            {0x010000000000100DULL, "Homebrew"},
+            {0x0100000000001013ULL, "User Settings"},
+        };
+        if (SYSTEM_NAMES.count(appId)) {
+            f.gameName = SYSTEM_NAMES.at(appId);
+            nameCache[f.gameId] = f.gameName;
+            continue;
+        }
+
+        // Get application control data (NACP + icon)
+        NsApplicationControlData* ctrlData = (NsApplicationControlData*)malloc(sizeof(NsApplicationControlData));
+        if (!ctrlData) continue;
+
+        u64 actualSize = 0;
+        Result r = nsGetApplicationControlData(NsApplicationControlSource_Storage, appId, ctrlData, sizeof(NsApplicationControlData), &actualSize);
+
+        if (R_SUCCEEDED(r) && actualSize > 0) {
+            // NACP title is at offset 0, up to 512 bytes per language entry
+            // First entry (American English) name is at offset 0, 512 bytes, null-terminated
+            char name[513] = {};
+            memcpy(name, ctrlData->nacp.lang[0].name, 512);
+            name[512] = '\0';
+
+            // Trim null bytes and whitespace
+            std::string gameName(name);
+            size_t end = gameName.find('\0');
+            if (end != std::string::npos) gameName = gameName.substr(0, end);
+            // Trim trailing spaces
+            while (!gameName.empty() && (gameName.back() == ' ' || gameName.back() == '\0'))
+                gameName.pop_back();
+
+            if (!gameName.empty()) {
+                f.gameName = gameName;
+                nameCache[f.gameId] = gameName;
+            }
+        }
+        free(ctrlData);
+    }
+
+    nsExit();
+
+    // Any file still without a name gets grouped as "Misc"
+    for (auto& f : m_files) {
+        if (f.gameName.empty()) {
+            f.gameName = "Misc";
+            nameCache[f.gameId] = "Misc";
+        }
+    }
+}
+
 int Gallery::getCount() const { return (int)m_files.size(); }
 
 int Gallery::getScreenshotCount() const {
@@ -154,10 +235,6 @@ int Gallery::getVideoCount() const {
 
 const std::vector<MediaFile>& Gallery::getFiles() const { return m_files; }
 
-const MediaFile* Gallery::getFile(int index) const {
-    if (index < 0 || index >= (int)m_files.size()) return nullptr;
-    return &m_files[index];
-}
 
 const MediaFile* Gallery::findByFilename(const std::string& filename) const {
     for (const auto& f : m_files)
@@ -175,11 +252,12 @@ std::string Gallery::jsonEscape(const std::string& s) {
     return out;
 }
 
-std::string Gallery::toJSON(int offset, int limit, const std::string& filter) const {
+std::string Gallery::toJSON(int offset, int limit, const std::string& filter, const std::string& game) const {
     std::vector<const MediaFile*> filtered;
     for (const auto& f : m_files) {
         if (filter == "screenshots" && f.type != MEDIA_SCREENSHOT) continue;
         if (filter == "videos"      && f.type != MEDIA_VIDEO)      continue;
+        if (!game.empty() && f.gameId != game && f.gameName != game) continue;
         filtered.push_back(&f);
     }
 
@@ -193,6 +271,15 @@ std::string Gallery::toJSON(int offset, int limit, const std::string& filter) co
     json << "\"limit\":" << limit << ",";
     json << "\"screenshots\":" << getScreenshotCount() << ",";
     json << "\"videos\":" << getVideoCount() << ",";
+    // Game names list
+    json << "\"games\":[";
+    auto gnames = getGameNames();
+    for (int i = 0; i < (int)gnames.size(); i++) {
+        if (i) json << ",";
+        json << "\"" << jsonEscape(gnames[i]) << "\"";
+    }
+    json << "],";
+
     json << "\"files\":[";
 
     for (int i = offset; i < end; i++) {
@@ -203,6 +290,7 @@ std::string Gallery::toJSON(int offset, int limit, const std::string& filter) co
         json << "\"date\":\"" << jsonEscape(f->date) << "\",";
         json << "\"time\":\"" << jsonEscape(f->time) << "\",";
         json << "\"gameId\":\"" << jsonEscape(f->gameId) << "\",";
+        json << "\"gameName\":\"" << jsonEscape(f->gameName) << "\",";
         json << "\"type\":\"" << (f->type == MEDIA_SCREENSHOT ? "screenshot" : "video") << "\",";
         json << "\"size\":" << f->filesize;
         json << "}";
@@ -210,6 +298,21 @@ std::string Gallery::toJSON(int offset, int limit, const std::string& filter) co
 
     json << "]}";
     return json.str();
+}
+
+
+std::vector<std::string> Gallery::getGameNames() const {
+    std::vector<std::string> names;
+    std::set<std::string> seen;
+    for (const auto& f : m_files) {
+        std::string name = f.gameName.empty() ? f.gameId : f.gameName;
+        if (!name.empty() && name != "Unknown" && !seen.count(name)) {
+            names.push_back(name);
+            seen.insert(name);
+        }
+    }
+    std::sort(names.begin(), names.end());
+    return names;
 }
 
 bool Gallery::serveFileToSocket(const std::string& filename, int sock, long rangeStart, long rangeEnd) const {

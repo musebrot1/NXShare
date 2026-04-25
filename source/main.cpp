@@ -1,11 +1,6 @@
 #include <switch.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-#include <dirent.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <pthread.h>
 #include <vector>
 #include <string>
 #include <algorithm>
@@ -47,7 +42,7 @@ int main(int argc, char* argv[]) {
             if (padGetButtonsDown(&pad) & HidNpadButton_Plus) break;
                     svcSleepThread(16666666ULL);
         }
-        nifmExit(); socketExit(); consoleExit(NULL);
+        nifmExit(); socketExit();
         return 0;
     }
 
@@ -87,6 +82,6 @@ int main(int argc, char* argv[]) {
     }
 
     server.stop();
-    nifmExit(); socketExit(); romfsExit(); consoleExit(NULL);
+    nifmExit(); socketExit(); romfsExit();
     return 0;
 }

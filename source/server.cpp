@@ -234,12 +234,13 @@ void Server::handleAPI(int sock, const ClientRequest& req) {
     if (req.path == "/api/list") {
         int offset = 0, limit = 50;
         std::string filter = getQueryParam(req.query, "filter");
+        std::string game   = getQueryParam(req.query, "game");
         std::string offsetStr = getQueryParam(req.query, "offset");
         std::string limitStr  = getQueryParam(req.query, "limit");
         if (!offsetStr.empty()) offset = atoi(offsetStr.c_str());
         if (!limitStr.empty())  limit  = atoi(limitStr.c_str());
         
-        std::string json = m_gallery->toJSON(offset, limit, filter);
+        std::string json = m_gallery->toJSON(offset, limit, filter, game);
         sendResponse(sock, 200, "application/json", json);
         return;
     }
