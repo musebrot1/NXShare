@@ -2,7 +2,7 @@
 
 **A Nintendo Switch Homebrew app to transfer your screenshots and videos to any device via browser.**
 
-![NXShare](screenshot.jpg)
+![NXShare](icon.jpg)
 
 ---
 
