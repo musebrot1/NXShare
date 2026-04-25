@@ -45,11 +45,9 @@ Press `Y` and Enter when prompted.
 
 ## Step 4: Build the project
 
-Navigate to the project folder in the MSYS2 terminal:
+Navigate to the project folder in the MSYS2 terminal
 
 ```bash
-# Replace "YourUsername" with your actual Windows username
-cd /c/Users/YourUsername/Downloads/NXShare
 
 # Build
 make all
