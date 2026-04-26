@@ -40,6 +40,8 @@ NXShare starts a small web server on your Switch. Open the displayed URL in any 
 2. Copy it to the `switch/` folder on your SD card
 3. Launch via the Homebrew Launcher
 
+NXShare is also available in the Homebrew App Store
+
 ---
 
 ## Usage
