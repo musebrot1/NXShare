@@ -10,9 +10,6 @@
 #include <map>
 #include <set>
 
-Gallery::Gallery() {}
-Gallery::~Gallery() {}
-
 // Scan a directory for PNG files saved by homebrew
 void Gallery::scanPngDirectory(const char* dirPath) {
     DIR* d = opendir(dirPath);
