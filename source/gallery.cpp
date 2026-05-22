@@ -10,13 +10,24 @@
 #include <map>
 #include <set>
 
+// YYYY/MM/DD/file.png
+constexpr int MAX_DIR_DEPTH = 3;
+
 // Scan a directory for PNG files saved by homebrew
-void Gallery::scanPngDirectory(const char* dirPath) {
-    DIR* d = opendir(dirPath);
+void Gallery::scanPngDirectory(std::string dirPath, int depth) {
+    DIR* d = opendir(dirPath.c_str());
     if (!d) return;
 
+    // If desired, we could create separate loops for depth < MAX_DIR_DEPTH
+    // or ==, and only scan for photos in the latter.
+    // I don't care enough to do so.
     struct dirent* ent;
     while ((ent = readdir(d)) != nullptr) {
+        if (ent->d_type == DT_DIR && depth < MAX_DIR_DEPTH) {
+            auto child = dirPath + "/" + ent->d_name;
+            scanPngDirectory(child, depth + 1);
+        }
+
         if (ent->d_type != DT_REG) continue;
 
         std::string name = ent->d_name;
@@ -28,7 +39,7 @@ void Gallery::scanPngDirectory(const char* dirPath) {
 
         MediaFile f;
         f.filename  = name;
-        f.fullPath  = std::string(dirPath) + "/" + name;
+        f.fullPath  = dirPath + "/" + name;
         f.type      = MEDIA_SCREENSHOT;
         f.gameName  = "Misc";
         f.gameId    = "png";
@@ -80,7 +91,7 @@ void Gallery::scan() {
         "sdmc:/emuMMC/SD01/Nintendo/Album/PNGs",
     };
     for (const char* dir : PNG_DIRS) {
-        scanPngDirectory(dir);
+        scanPngDirectory(dir, 0);
     }
 
     // Resolve game names via NS service
