@@ -4,12 +4,44 @@
 #include <vector>
 #include <string>
 #include <algorithm>
+#include <atomic>
 
 #include "server.hpp"
 #include "gallery.hpp"
 #include "ui.hpp"
 
 #define PORT 8080
+
+struct AppletHookContext {
+    Server* server;
+    std::atomic<bool>* refreshNetwork;
+};
+
+static std::string getCurrentIpAddress() {
+    NifmInternetConnectionStatus status{};
+    NifmInternetConnectionType type{};
+    u32 strength = 0;
+    if (R_FAILED(nifmGetInternetConnectionStatus(&type, &strength, &status)) ||
+        status != NifmInternetConnectionStatus_Connected)
+        return "";
+
+    u32 ip = 0;
+    if (R_FAILED(nifmGetCurrentIpAddress(&ip)) || ip == 0)
+        return "";
+
+    char ipStr[32] = {};
+    snprintf(ipStr, sizeof(ipStr), "%d.%d.%d.%d",
+        (ip>>0)&0xFF, (ip>>8)&0xFF, (ip>>16)&0xFF, (ip>>24)&0xFF);
+    return ipStr;
+}
+
+static void handleAppletHook(AppletHookType hook, void* param) {
+    if (hook != AppletHookType_OnResume) return;
+
+    AppletHookContext* context = static_cast<AppletHookContext*>(param);
+    context->server->requestRestart();
+    context->refreshNetwork->store(true);
+}
 
 int main(int argc, char* argv[]) {
     padConfigureInput(1, HidNpadStyleSet_NpadStandard);
@@ -22,50 +54,26 @@ int main(int argc, char* argv[]) {
 
     printf("NXShare - Starting up...\n");
 
-    // Wait for network
-    NifmInternetConnectionStatus status;
-    NifmInternetConnectionType type;
-    u32 strength;
-    int retries = 0;
-    while (retries < 30) {
-        nifmGetInternetConnectionStatus(&type, &strength, &status);
-        if (status == NifmInternetConnectionStatus_Connected) break;
-        printf("Waiting for network... (%d/30)\n", retries + 1);
-            svcSleepThread(1000000000ULL);
-        retries++;
-    }
-
-    if (retries >= 30) {
-        printf("ERROR: No network connection!\nMake sure WiFi is connected.\n\nPress + to exit.\n");
-            while (appletMainLoop()) {
-            padUpdate(&pad);
-            if (padGetButtonsDown(&pad) & HidNpadButton_Plus) break;
-                    svcSleepThread(16666666ULL);
-        }
-        nifmExit(); socketExit();
-        return 0;
-    }
-
-    // Get IP
-    char ipStr[32] = {};
-    u32 ip = 0;
-    nifmGetCurrentIpAddress(&ip);
-    snprintf(ipStr, sizeof(ipStr), "%d.%d.%d.%d",
-        (ip>>0)&0xFF, (ip>>8)&0xFF, (ip>>16)&0xFF, (ip>>24)&0xFF);
+    std::string ipAddress = getCurrentIpAddress();
 
     // Scan gallery and start server
     Gallery gallery;
     gallery.scan();
     int mediaCount = gallery.getCount();
 
-    Server server(PORT, &gallery, ipStr);
+    Server server(PORT, &gallery);
     server.start();
 
-    // Draw UI once, then never print anything else
     UI ui;
-    ui.drawInfo(ipStr, PORT, mediaCount);
+    ui.drawInfo(ipAddress, PORT, mediaCount);
 
-    // Main loop - no printf after this point so screen stays clean
+    std::atomic<bool> refreshNetwork(false);
+    AppletHookContext hookContext{&server, &refreshNetwork};
+    AppletHookCookie hookCookie{};
+    appletSetRestartMessageEnabled(true);
+    appletHook(&hookCookie, handleAppletHook, &hookContext);
+
+    int networkCheckFrames = 0;
     while (appletMainLoop()) {
         padUpdate(&pad);
         u64 kDown = padGetButtonsDown(&pad);
@@ -75,12 +83,24 @@ int main(int argc, char* argv[]) {
         if (kDown & HidNpadButton_Y) {
             gallery.scan();
             mediaCount = gallery.getCount();
-            ui.drawInfo(ipStr, PORT, mediaCount);
-                }
+            ui.drawInfo(ipAddress, PORT, mediaCount);
+        }
 
-            svcSleepThread(16666666ULL);
+        if (refreshNetwork.exchange(false) || ++networkCheckFrames >= 60) {
+            networkCheckFrames = 0;
+            std::string newIpAddress = getCurrentIpAddress();
+            if (newIpAddress != ipAddress) {
+                ipAddress = newIpAddress;
+                server.requestRestart();
+                ui.drawInfo(ipAddress, PORT, mediaCount);
+            }
+        }
+
+        svcSleepThread(16666666ULL);
     }
 
+    appletUnhook(&hookCookie);
+    appletSetRestartMessageEnabled(false);
     server.stop();
     nifmExit(); socketExit(); romfsExit();
     return 0;

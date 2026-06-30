@@ -95,7 +95,10 @@ void UI::drawInfo(const std::string& ip, int port, int mediaCount) {
     m_buf = (u32*)framebufferBegin(&m_fb, &m_stride);
     clear(COL_BG);
 
-    std::string url = "http://" + ip + ":" + std::to_string(port);
+    bool networkAvailable = !ip.empty();
+    std::string url = networkAvailable
+        ? "http://" + ip + ":" + std::to_string(port)
+        : "";
     char countStr[32];
     snprintf(countStr, sizeof(countStr), "%d", mediaCount);
 
@@ -113,29 +116,28 @@ void UI::drawInfo(const std::string& ip, int port, int mediaCount) {
 
     int contentY = hdrH + 30;
 
-    // "Open the URL in your browser"
-    drawTextCentered("Open the URL in your browser", contentY, COL_MUTED, 2);
-
-    // URL
-    drawTextCentered(url, contentY + 32, COL_ACCENT, 2);
-
-    // Divider
     int divW = 600;
-    drawRect((FB_WIDTH - divW) / 2, contentY + 62, divW, 1, COL_BORDER);
+    int contentBottom;
+    if (networkAvailable) {
+        drawTextCentered("Open the URL in your browser", contentY, COL_MUTED, 2);
+        drawTextCentered(url, contentY + 32, COL_ACCENT, 2);
+        drawRect((FB_WIDTH - divW) / 2, contentY + 62, divW, 1, COL_BORDER);
+        drawTextCentered("or scan the QR code", contentY + 74, COL_MUTED, 2);
 
-    // "or scan the QR code"
-    drawTextCentered("or scan the QR code", contentY + 74, COL_MUTED, 2);
-
-    // QR code centered
-    int qrY = contentY + 106;
-    drawQR(url, -1, qrY, qrSize); // -1 = auto-center
+        int qrY = contentY + 106;
+        drawQR(url, -1, qrY, qrSize);
+        contentBottom = qrY + qrTotalPx;
+    } else {
+        drawTextCentered("Waiting for network", contentY + 70, COL_TEXT, 3);
+        drawTextCentered("Connect the Switch to Wi-Fi to start sharing", contentY + 112, COL_MUTED, 2);
+        contentBottom = contentY + 220;
+    }
 
     // Media count — vertically centered between QR bottom and footer
     int footerTop = FB_HEIGHT - 50;
-    int qrBottom  = qrY + qrTotalPx;
     // Block height: 1 (divider) + 14 + 18 (label) + 14 + 40 (number) = ~87px
     int blockH = 87;
-    int blockTop = qrBottom + (footerTop - qrBottom - blockH) / 2;
+    int blockTop = contentBottom + (footerTop - contentBottom - blockH) / 2;
     drawRect((FB_WIDTH - divW) / 2, blockTop, divW, 1, COL_BORDER);
     drawTextCentered("Media files found", blockTop + 14, COL_MUTED, 2);
     drawTextCentered(countStr, blockTop + 40, COL_TEXT, 5);

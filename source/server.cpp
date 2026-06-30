@@ -1,5 +1,7 @@
 #include "server.hpp"
 #include "gallery.hpp"
+#include <switch.h>
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -17,26 +19,38 @@
 #include "thumb.hpp"
 #include "png_placeholder.hpp"
 
-Server::Server(int port, Gallery* gallery, const char* ipStr)
+Server::Server(int port, Gallery* gallery)
     : m_port(port), m_socket(-1), m_gallery(gallery),
-      m_ip(ipStr), m_running(false) {}
+      m_running(false), m_restartRequested(false),
+      m_thread(), m_threadStarted(false) {}
 
 Server::~Server() {
     stop();
 }
 
 void Server::start() {
-    m_running = true;
-    pthread_create(&m_thread, nullptr, threadFunc, this);
+    if (m_threadStarted) return;
+
+    m_running.store(true);
+    m_restartRequested.store(false);
+    if (pthread_create(&m_thread, nullptr, threadFunc, this) != 0) {
+        m_running.store(false);
+        return;
+    }
+    m_threadStarted = true;
 }
 
 void Server::stop() {
-    m_running = false;
-    if (m_socket >= 0) {
-        close(m_socket);
-        m_socket = -1;
-    }
+    if (!m_threadStarted) return;
+
+    m_running.store(false);
+    m_restartRequested.store(true);
     pthread_join(m_thread, nullptr);
+    m_threadStarted = false;
+}
+
+void Server::requestRestart() {
+    m_restartRequested.store(true);
 }
 
 void* Server::threadFunc(void* arg) {
@@ -44,35 +58,60 @@ void* Server::threadFunc(void* arg) {
     return nullptr;
 }
 
-void Server::serverLoop() {
-    m_socket = socket(AF_INET, SOCK_STREAM, 0);
-    if (m_socket < 0) {
-        printf("  ERROR: Could not create socket\n");
-        return;
-    }
+bool Server::isNetworkAvailable() const {
+    NifmInternetConnectionStatus status{};
+    NifmInternetConnectionType type{};
+    u32 strength = 0;
+    Result rc = nifmGetInternetConnectionStatus(&type, &strength, &status);
+    return R_SUCCEEDED(rc) && status == NifmInternetConnectionStatus_Connected;
+}
+
+bool Server::openListeningSocket() {
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) return false;
 
     // Allow address reuse
     int opt = 1;
-    setsockopt(m_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
     struct sockaddr_in addr = {};
     addr.sin_family      = AF_INET;
     addr.sin_addr.s_addr = INADDR_ANY;
     addr.sin_port        = htons(m_port);
 
-    if (bind(m_socket, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        printf("  ERROR: Could not bind to port %d\n", m_port);
-        close(m_socket);
-        return;
+    if (bind(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        close(sock);
+        return false;
     }
 
-    if (listen(m_socket, 8) < 0) {
-        printf("  ERROR: listen() failed\n");
-        close(m_socket);
-        return;
+    if (listen(sock, 8) < 0) {
+        close(sock);
+        return false;
     }
 
-    while (m_running) {
+    m_socket = sock;
+    return true;
+}
+
+void Server::closeListeningSocket() {
+    if (m_socket < 0) return;
+    shutdown(m_socket, SHUT_RDWR);
+    close(m_socket);
+    m_socket = -1;
+}
+
+void Server::serverLoop() {
+    while (m_running.load()) {
+        if (m_restartRequested.exchange(false))
+            closeListeningSocket();
+
+        if (m_socket < 0) {
+            if (!isNetworkAvailable() || !openListeningSocket()) {
+                svcSleepThread(500000000ULL);
+                continue;
+            }
+        }
+
         // Use select() with timeout so we can check m_running
         fd_set fds;
         FD_ZERO(&fds);
@@ -80,24 +119,44 @@ void Server::serverLoop() {
         struct timeval tv = {1, 0}; // 1 second timeout
         
         int ready = select(m_socket + 1, &fds, nullptr, nullptr, &tv);
-        if (ready <= 0) continue;
+        if (ready == 0) {
+            if (!isNetworkAvailable())
+                closeListeningSocket();
+            continue;
+        }
+        if (ready < 0) {
+            if (errno != EINTR) {
+                closeListeningSocket();
+                svcSleepThread(250000000ULL);
+            }
+            continue;
+        }
+        if (!FD_ISSET(m_socket, &fds)) continue;
 
         struct sockaddr_in clientAddr;
         socklen_t clientLen = sizeof(clientAddr);
         int clientSock = accept(m_socket, (struct sockaddr*)&clientAddr, &clientLen);
-        if (clientSock < 0) continue;
+        if (clientSock < 0) {
+            if (errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK) {
+                closeListeningSocket();
+                svcSleepThread(250000000ULL);
+            }
+            continue;
+        }
 
         handleClient(clientSock);
+        shutdown(clientSock, SHUT_RDWR);
         close(clientSock);
     }
 
-    close(m_socket);
+    closeListeningSocket();
 }
 
 void Server::handleClient(int clientSock) {
-    // Set receive timeout
+    // Prevent dead clients from blocking recovery or shutdown indefinitely.
     struct timeval tv = {5, 0};
     setsockopt(clientSock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    setsockopt(clientSock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
 
     // Read request
     char buf[4096] = {};

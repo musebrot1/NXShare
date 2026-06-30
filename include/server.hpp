@@ -1,4 +1,5 @@
 #pragma once
+#include <atomic>
 #include <string>
 #include <pthread.h>
 #include "gallery.hpp"
@@ -13,23 +14,28 @@ struct ClientRequest {
 
 class Server {
 public:
-    Server(int port, Gallery* gallery, const char* ipStr);
+    Server(int port, Gallery* gallery);
     ~Server();
 
     void start();
     void stop();
-    bool isRunning() const { return m_running; }
+    void requestRestart();
+    bool isRunning() const { return m_running.load(); }
 
 private:
     int m_port;
     int m_socket;
     Gallery* m_gallery;
-    std::string m_ip;
-    bool m_running;
+    std::atomic<bool> m_running;
+    std::atomic<bool> m_restartRequested;
     pthread_t m_thread;
+    bool m_threadStarted;
 
     static void* threadFunc(void* arg);
     void serverLoop();
+    bool openListeningSocket();
+    void closeListeningSocket();
+    bool isNetworkAvailable() const;
     void handleClient(int clientSock);
 
     // Request parsing
