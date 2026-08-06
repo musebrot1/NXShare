@@ -16,6 +16,7 @@ struct MediaFile {
     std::string time;
     std::string gameId;
     std::string gameName;   // Resolved from NS application control data
+    std::string storage;    // "system" (NAND) or "sd"
     s64 sortTimestamp;      // UTC epoch seconds used for cross-format ordering
     MediaType type;
     size_t filesize;
@@ -32,7 +33,8 @@ public:
     const std::vector<MediaFile>& getFiles() const;
     const MediaFile* findByFilename(const std::string& filename) const;
     std::string toJSON(int offset = 0, int limit = 50, const std::string& filter = "",
-                       const std::string& game = "", int year = 0, int month = 0) const;
+                       const std::string& game = "", int year = 0, int month = 0,
+                       const std::string& storage = "") const;
     std::vector<std::string> getGameNames() const;
 
     // Get JPEG thumbnail via capsa API (works for both screenshots and videos)

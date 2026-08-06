@@ -41,7 +41,8 @@ header {
 .stat-div { width: 1px; height: 14px; background: var(--border); }
 
 .filter-divider { width: 1px; height: 20px; background: var(--border); margin: 0 4px; flex-shrink: 0; }
-#game-filters { display: flex; gap: 7px; flex-wrap: wrap; }
+#game-filters,
+#storage-filters { display: flex; gap: 7px; flex-wrap: wrap; }
 #date-filters { display: flex; flex-direction: column; gap: 7px; width: 100%; }
 .header-row1 {
   display: flex;
@@ -62,7 +63,8 @@ header {
 }
 .header-spacer { flex: 1; }
 .header-games,
-.header-dates {
+.header-dates,
+.header-storage {
   display: flex;
   align-items: center;
   padding: 0 24px 8px;
@@ -94,6 +96,8 @@ header {
 .filter-btn.game.active { background: #38d9a9; border-color: #38d9a9; color: #111; }
 .filter-btn.date { background: rgba(56,217,169,0.06); }
 .filter-btn.date.active { background: #38d9a9; border-color: #38d9a9; color: #111; }
+.filter-btn.storage { background: rgba(56,217,169,0.06); }
+.filter-btn.storage.active { background: #38d9a9; border-color: #38d9a9; color: #111; }
 .date-all-row,
 .date-filter-row {
   display: flex;
@@ -369,13 +373,26 @@ footer.hidden { display: none; }
     padding: 5px 8px;
     font-size: 12px;
   }
+  #storage-toggle-btn {
+    grid-column: span 6;
+    max-width: none;
+    padding: 5px 8px;
+    font-size: 12px;
+  }
   #game-filters {
     width: 100%;
     flex-wrap: wrap;
     gap: 5px;
   }
+  #storage-filters {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
   .header-games,
-  .header-dates {
+  .header-dates,
+  .header-storage {
     padding: 0 12px 8px;
   }
   #date-filters { gap: 5px; }
@@ -441,6 +458,7 @@ footer.hidden { display: none; }
       <button class="filter-btn" data-filter="videos">Videos</button>
       <button class="filter-btn game" id="game-toggle-btn" onclick="toggleGameFilters()">Games ▾</button>
       <button class="filter-btn date" id="date-toggle-btn" onclick="toggleDateFilters()">Date ▾</button>
+      <button class="filter-btn storage" id="storage-toggle-btn" onclick="toggleStorageFilters()">Storage ▾</button>
     </div>
     <div class="header-spacer"></div>
     <div class="header-actions">
@@ -459,6 +477,9 @@ footer.hidden { display: none; }
   </div>
   <div class="header-dates" style="display:none">
     <div id="date-filters"></div>
+  </div>
+  <div class="header-storage" style="display:none">
+    <div id="storage-filters"></div>
   </div>
 </header>
 
@@ -494,7 +515,7 @@ footer.hidden { display: none; }
 
 <script>
 const BASE = '';
-let allFiles = [], filteredFiles = [], currentFilter = '', currentGame = '';
+let allFiles = [], filteredFiles = [], currentFilter = '', currentGame = '', currentStorage = '';
 let currentYear = 0, currentMonth = 0;
 let selected = new Set(), offset = 0;
 const LIMIT = 60;
@@ -512,6 +533,7 @@ function toggleGameFilters() {
   const btn = document.getElementById('game-toggle-btn');
   const visible = container.style.display !== 'none';
   closeDateFilters();
+  closeStorageFilters();
   container.style.display = visible ? 'none' : 'flex';
   btn.textContent = visible ? 'Games ▾' : 'Games ▴';
   const gamesRow = container.closest('.header-games');
@@ -530,6 +552,7 @@ function toggleDateFilters() {
   const row = document.querySelector('.header-dates');
   const visible = row.style.display !== 'none';
   closeGameFilters();
+  closeStorageFilters();
   row.style.display = visible ? 'none' : 'flex';
   document.getElementById('date-toggle-btn').textContent = visible ? 'Date ▾' : 'Date ▴';
 }
@@ -538,6 +561,21 @@ function closeDateFilters() {
   const row = document.querySelector('.header-dates');
   row.style.display = 'none';
   document.getElementById('date-toggle-btn').textContent = 'Date ▾';
+}
+
+function toggleStorageFilters() {
+  const row = document.querySelector('.header-storage');
+  const visible = row.style.display !== 'none';
+  closeGameFilters();
+  closeDateFilters();
+  row.style.display = visible ? 'none' : 'flex';
+  document.getElementById('storage-toggle-btn').textContent = visible ? 'Storage ▾' : 'Storage ▴';
+}
+
+function closeStorageFilters() {
+  const row = document.querySelector('.header-storage');
+  row.style.display = 'none';
+  document.getElementById('storage-toggle-btn').textContent = 'Storage ▾';
 }
 
 function updateGameButtonStyles() {
@@ -582,6 +620,51 @@ function populateGameFilters(games) {
     container.appendChild(btn);
   });
   updateGameButtonStyles();
+}
+
+const storageLabels = { system: 'System memory', sd: 'SD card' };
+
+function updateStorageButtonStyles() {
+  document.querySelectorAll('.filter-btn.storage:not(#storage-toggle-btn)').forEach(btn => {
+    const active = btn.dataset.storage === currentStorage;
+    btn.classList.toggle('active', active);
+    btn.style.background = active ? '#38d9a9' : '';
+    btn.style.borderColor = active ? '#38d9a9' : '';
+    btn.style.color = active ? '#111' : '';
+  });
+  document.getElementById('storage-toggle-btn').classList.toggle('active', currentStorage !== '');
+}
+
+function populateStorageFilters(storages) {
+  const container = document.getElementById('storage-filters');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const allBtn = document.createElement('button');
+  allBtn.className = 'filter-btn storage';
+  allBtn.dataset.storage = '';
+  allBtn.textContent = 'All storage';
+  allBtn.addEventListener('click', () => {
+    currentStorage = '';
+    updateStorageButtonStyles();
+    clearSelection(); loadFiles(true);
+  });
+  container.appendChild(allBtn);
+
+  storages.forEach(storage => {
+    if (!storageLabels[storage]) return;
+    const btn = document.createElement('button');
+    btn.className = 'filter-btn storage';
+    btn.dataset.storage = storage;
+    btn.textContent = storageLabels[storage];
+    btn.addEventListener('click', () => {
+      currentStorage = storage;
+      updateStorageButtonStyles();
+      clearSelection(); loadFiles(true);
+    });
+    container.appendChild(btn);
+  });
+  updateStorageButtonStyles();
 }
 
 function updateDateButtonStyles() {
@@ -667,6 +750,7 @@ async function loadFiles(reset = false) {
     const params = new URLSearchParams({offset, limit: LIMIT});
     if (currentFilter) params.set('filter', currentFilter);
     if (currentGame) params.set('game', currentGame);
+    if (currentStorage) params.set('storage', currentStorage);
     if (currentYear) params.set('year', currentYear);
     if (currentMonth) params.set('month', currentMonth);
     const res = await fetch(`${BASE}/api/list?${params}`);
@@ -677,6 +761,7 @@ async function loadFiles(reset = false) {
     if (reset) {
       populateGameFilters(data.games || []);
       populateDateFilters(data.dates || []);
+      populateStorageFilters(data.storages || []);
     }
     allFiles = reset ? data.files : [...allFiles, ...data.files];
     filteredFiles = allFiles;

@@ -85,6 +85,7 @@ void Gallery::scanPngDirectory(const char* dirPath) {
         f.type     = MEDIA_SCREENSHOT;
         f.gameName = "Misc";
         f.gameId   = "png";
+        f.storage  = "sd";
         f.filesize = 0;
         f.sortTimestamp = 0;
 
@@ -221,6 +222,7 @@ void Gallery::scanStorage(CapsAlbumStorage storage) {
         file.type      = type;
         file.filesize  = e.size;
         file.capsEntry = e;
+        file.storage   = storage == CapsAlbumStorage_Nand ? "system" : "sd";
         file.sortTimestamp = localTimestampFromAlbumDateTime(e.file_id.datetime);
         parseFilename(file);
         m_files.push_back(file);
@@ -434,12 +436,14 @@ std::string Gallery::jsonEscape(const std::string& s) {
 }
 
 std::string Gallery::toJSON(int offset, int limit, const std::string& filter,
-                            const std::string& game, int year, int month) const {
+                            const std::string& game, int year, int month,
+                            const std::string& storage) const {
     std::vector<const MediaFile*> filtered;
     for (const auto& f : m_files) {
         if (filter == "screenshots" && f.type != MEDIA_SCREENSHOT) continue;
         if (filter == "videos"      && f.type != MEDIA_VIDEO)      continue;
         if (!game.empty() && f.gameId != game && f.gameName != game) continue;
+        if (!storage.empty() && f.storage != storage) continue;
         if (year > 0) {
             if (f.date.size() < 7 || atoi(f.date.substr(0, 4).c_str()) != year) continue;
             if (month > 0 && atoi(f.date.substr(5, 2).c_str()) != month) continue;
@@ -464,6 +468,19 @@ std::string Gallery::toJSON(int offset, int limit, const std::string& filter,
         if (i) json << ",";
         json << "\"" << jsonEscape(gnames[i]) << "\"";
     }
+    json << "],";
+
+    // Storage locations present in the complete album, independent of filters.
+    bool hasSystemStorage = false;
+    bool hasSdStorage = false;
+    for (const auto& f : m_files) {
+        if (f.storage == "system") hasSystemStorage = true;
+        if (f.storage == "sd") hasSdStorage = true;
+    }
+    json << "\"storages\":[";
+    if (hasSystemStorage) json << "\"system\"";
+    if (hasSystemStorage && hasSdStorage) json << ",";
+    if (hasSdStorage) json << "\"sd\"";
     json << "],";
 
     // Available dates from the complete album, independent of active filters.
@@ -503,6 +520,7 @@ std::string Gallery::toJSON(int offset, int limit, const std::string& filter,
         json << "\"time\":\"" << jsonEscape(f->time) << "\",";
         json << "\"gameId\":\"" << jsonEscape(f->gameId) << "\",";
         json << "\"gameName\":\"" << jsonEscape(f->gameName) << "\",";
+        json << "\"storage\":\"" << jsonEscape(f->storage) << "\",";
         json << "\"type\":\"" << (f->type == MEDIA_SCREENSHOT ? "screenshot" : "video") << "\",";
         json << "\"size\":" << f->filesize;
         json << "}";
