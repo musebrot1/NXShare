@@ -148,7 +148,7 @@ void UI::drawInfo(const std::string& ip, int port, int mediaCount) {
     drawRect(0, barY + 1, FB_WIDTH, FB_HEIGHT - barY - 1, COL_SURFACE);
 
     drawTextCentered("Press  [+]  to exit", barY + 8, COL_MUTED, 2);
-    drawTextCentered("NXShare v1.8.4  ---  by musebrot <3", barY + 30, COL_DIM, 2);
+    drawTextCentered("NXShare v1.9.0  ---  by musebrot <3", barY + 30, COL_DIM, 2);
 
     present();
 }

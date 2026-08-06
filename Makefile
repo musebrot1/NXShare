@@ -5,7 +5,7 @@
 
 APP_TITLE   := NXShare
 APP_AUTHOR  := musebrot
-APP_VERSION := 1.8.4
+APP_VERSION := 1.9.0
 
 TARGET      := NXShare
 BUILD       := build
