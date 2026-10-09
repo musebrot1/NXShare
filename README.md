@@ -8,27 +8,12 @@
 
 ## What it does
 
-NXShare starts a small web server on your Switch. Open the displayed URL in any browser on a PC, phone or tablet (same WiFi required), and you get a clean gallery view of all your screenshots and videos - with thumbnails, filters and multi-select download.
-
-- 🎬 Browse and view all screenshots and videos
-- 🔍 Filter by screenshots/videos or by game
-- ⬇️ Download individual files or select multiple at once
-
+NXShare lets you browse and download the Screenshots and Videos of the Switch Album in any browser connected to the same network.
 
 
 ## Screenshots
 
 ![NXShare Gallery](screenshot.jpg)
-
----
-
-## Compatibility
-
-| | |
-|---|---|
-| **Atmosphère** | tested 1.9.3 and 1.11.1 |
-| **Firmware** | tested 20.3.0 and 22.0.0 |
-| **Storage** | SysMMC and emuMMC (auto-detected) |
 
 ---
 
@@ -43,10 +28,9 @@ NXShare is also available in the Homebrew App Store
 
 ## Usage
 
-1. Make sure your Switch is connected to WiFi
-2. Launch NXShare from the Homebrew Launcher (Applet Mode)
-3. The screen shows a URL / QR code. Open the URL in any browser on the same network, or scan the QR code
-5. Browse, preview and download your media
+- Launch NXShare from the Homebrew Launcher (Applet Mode)
+- The screen shows a URL / QR code. Open the URL in any browser on the same network, or scan the QR code
+-  Browse, preview and download your media
 
 ---
 
